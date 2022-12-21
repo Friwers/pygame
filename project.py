@@ -4,10 +4,21 @@ import sys
 
 BLACK = pygame.Color("black")
 GREEN = pygame.Color("green")
-SIZE = WIDTH, HEIGHT = 700, 800
+SIZE = WIDTH, HEIGHT = 800, 800
 SCREEN = pygame.display.set_mode(SIZE)
 FPS = 60
 all_sprites = pygame.sprite.Group()
+bullets = []
+enemies = []
+aliens = [
+    "                            ",
+    " -------------------------- ",
+    " -------------------------- ",
+    " -------------------------- ",
+    " -------------------------- ",
+    " -------------------------- "]
+
+CELL_SIZE = WIDTH / (len(aliens[0]))
 
 
 def load_image(name: str, colorkey=None) -> pygame.Surface:
@@ -56,30 +67,53 @@ class Bullet(pygame.sprite.Sprite):
         self.rect.centerx = gun.rect.centerx
         self.rect.top = gun.rect.top
         self.y = self.rect.y
+        bullets.append(self)
 
     def update(self):
         self.y -= self.speed
         self.rect.y = self.y
+        if self.rect.y < 0:
+            bullets.pop(bullets.index(self))
+            self.kill()
 
 
 class Enemy(pygame.sprite.Sprite):
     image = load_image("yellow.png").convert_alpha()
+    image = pygame.transform.scale(image, (CELL_SIZE, CELL_SIZE))
 
-    def __init__(self):
+    def __init__(self, coord_x, coord_y):
         super().__init__(all_sprites)
         self.image = Enemy.image
         self.rect = self.image.get_rect()
-        self.rect.x = self.rect.width
-        self.rect.y = self.rect.height
+        self.rect.x = coord_x
+        self.rect.y = coord_y
+        self.x = self.rect.x
+        self.y = self.rect.y
+        enemies.append(Enemy)
+
+    def update(self):
+        self.y += 25 / FPS
+        self.rect.y = self.y
+        for j in bullets:
+            if pygame.sprite.collide_rect(self, j):
+                bullets.pop(bullets.index(j))
+                j.kill()
+                self.kill()
 
 
 def main():
     pygame.init()
     clock = pygame.time.Clock()
-    screen = pygame.display.set_mode((700, 800))
     pygame.display.set_caption("Space Invaders")
-    gun = Gun(screen)
-    emeny = Enemy()
+    gun = Gun(SCREEN)
+
+    for y in range(len(aliens)):
+        for x in range(len(aliens[0])):
+            coord_x = x * CELL_SIZE
+            coord_y = y * CELL_SIZE
+            if aliens[y][x] == "-":
+                pt = Enemy(coord_x, coord_y)
+                enemies.append(pt)
 
     running = True
     while running:
@@ -100,9 +134,10 @@ def main():
                     gun.left = False
 
         tick = clock.tick(FPS)
-        screen.fill(BLACK)
+        SCREEN.fill(BLACK)
         all_sprites.update()
         all_sprites.draw(SCREEN)
         pygame.display.flip()
+
 
 main()
