@@ -17,10 +17,11 @@ all_sprites = pygame.sprite.Group()
 enemies = pygame.sprite.Group()
 obstacles = pygame.sprite.Group()
 FILE_DIR = os.path.dirname(__file__)
-ANIMATION_DESTROY = [("data\obstacle1.png"), ("data\obstacle2.png"),
+ANIMATION_DESTROY = [("data\obstacle2.png"),
                      ("data\obstacle3.png"), ("data\obstacle4.png"),
                      ("data\obstacle5.png"), ("data\obstacle6.png"),
                      ("data\obstacle7.png"), ("data\obstacle8.png")]
+ANIMATION_MOVE = []
 
 
 def load_image(name: str, colorkey=None) -> pygame.Surface:
@@ -59,25 +60,32 @@ def loadLevel(level_num):
 aliens = []
 loadLevel('')
 CELL_SIZE = WIDTH / (len(aliens[0]))
+print(CELL_SIZE)
 
 
 class Gun(pygame.sprite.Sprite):
+    image = load_image("ship.png")
+    image = pygame.transform.scale(image, (CELL_SIZE * 1.85, CELL_SIZE * 1.85))
+
     def __init__(self, SCREEN):
         super().__init__(all_sprites)
         self.screen = SCREEN
-        self.image = load_image("ship.png")
+        self.image = Gun.image
         self.rect = self.image.get_rect()
         self.screen_rect = SCREEN.get_rect()
         self.rect.centerx = self.screen_rect.centerx
         self.rect.bottom = self.screen_rect.bottom
         self.right = False
         self.left = False
+        self.mask = pygame.mask.from_surface(self.image)
 
     def update(self, *args):
         if self.right and self.rect.right < self.screen_rect.right:
             self.rect.centerx += 250 / FPS
         if self.left and self.rect.left > self.screen_rect.left:
             self.rect.centerx -= 250 / FPS
+        if pygame.sprite.collide_mask(self, enemy_bullets[0]):
+            main()
         if pygame.sprite.spritecollideany(self, enemies):
             time.sleep(2)
             main()
@@ -113,6 +121,7 @@ class Enemy(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.image = Enemy.image
         self.rect = self.image.get_rect(topleft=(coord_x, coord_y))
+        self.startY = coord_y
         self.rect.x = coord_x
         self.rect.y = coord_y
         self.vx = 1
@@ -166,13 +175,17 @@ class Obstacle(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.image = Obstacle.image
         self.image.set_colorkey(BLACK)
+        self.life = 5
         self.mask = pygame.mask.from_surface(self.image)
+        # создаем список хранящий анимации
         boltAnim = []
+        # анимация разрушения преграды
         for anim in ANIMATION_DESTROY:
             boltAnim.append((anim, 100))
         self.boltAnim = pyganim.PygAnimation(boltAnim)
         self.boltAnim.scale((CELL_SIZE * 2.75, CELL_SIZE * 2.75))
         self.boltAnim.play()
+
         self.rect = self.image.get_rect(topleft=(coord_x, coord_y))
         self.rect.x = coord_x
         self.rect.y = coord_y
@@ -185,13 +198,23 @@ class Obstacle(pygame.sprite.Sprite):
                 self.image.fill(BLACK)
                 self.boltAnim.blit(self.image, (0, 0))
                 i.kill()
+                self.life -= 1
+                if self.life == 0:
+                    self.kill()
                 enemy_bullets.pop(0)
+
+        if bullets:
+            i = bullets[0]
+            if pygame.sprite.collide_mask(self, i):
+                i.kill()
+                bullets.pop(0)
 
 
 def main():
-    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun
+    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets
     all_sprites = pygame.sprite.Group()
     bullets = []
+    enemy_bullets = []
     enemies = pygame.sprite.Group()
     pygame.init()
     clock = pygame.time.Clock()
@@ -238,10 +261,10 @@ def main():
         if not enemy_bullets:
             random_enemies = random.choice(all_aliens[-1])
             Enemy_bullets(random_enemies)
-        tick = clock.tick(FPS)
         SCREEN.fill(BLACK)
         all_sprites.update()
         all_sprites.draw(SCREEN)
+        tick = clock.tick(FPS)
         pygame.display.flip()
 
 
