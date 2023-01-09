@@ -4,10 +4,12 @@ import sys
 import time
 import random
 import pyganim as pyganim
+import pygame_menu
 
 BLACK = pygame.Color("black")
 GREEN = pygame.Color("green")
 WHITE = pygame.Color("white")
+YELLOW = pygame.Color("yellow")
 SIZE = WIDTH, HEIGHT = 800, 800
 SCREEN = pygame.display.set_mode(SIZE)
 FPS = 60
@@ -21,7 +23,8 @@ ANIMATION_DESTROY = [("data\obstacle2.png"),
                      ("data\obstacle3.png"), ("data\obstacle4.png"),
                      ("data\obstacle5.png"), ("data\obstacle6.png"),
                      ("data\obstacle7.png"), ("data\obstacle8.png")]
-ANIMATION_MOVE = []
+ANIMATION_DEAD = [("data/dead.png")]
+ANIMATION_MOVE = [("data/enemies1.png"), ("data/enemies2.png")]
 
 
 def load_image(name: str, colorkey=None) -> pygame.Surface:
@@ -71,6 +74,7 @@ class Gun(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.screen = SCREEN
         self.image = Gun.image
+        self.life = 2
         self.rect = self.image.get_rect()
         self.screen_rect = SCREEN.get_rect()
         self.rect.centerx = self.screen_rect.centerx
@@ -80,25 +84,33 @@ class Gun(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
 
     def update(self, *args):
+
         if self.right and self.rect.right < self.screen_rect.right:
             self.rect.centerx += 250 / FPS
         if self.left and self.rect.left > self.screen_rect.left:
             self.rect.centerx -= 250 / FPS
-        if pygame.sprite.collide_mask(self, enemy_bullets[0]):
-            main()
+        if enemy_bullets and pygame.sprite.collide_rect(self, enemy_bullets[0]):
+            self.life -= 1
+            enemy_bullets[0].kill()
+            enemy_bullets.pop(0)
+            pygame.time.wait(1000)
+            if self.life == 0:
+                pygame.quit()
         if pygame.sprite.spritecollideany(self, enemies):
             time.sleep(2)
             main()
 
 
 class Bullet(pygame.sprite.Sprite):
+    """класс создания нашей пули"""
+
     def __init__(self, gun):
         if bullets:
             return
         super().__init__(all_sprites)
-        self.image = pygame.Surface((2, 12))
+        self.image = pygame.Surface((3, 12))
         self.image.fill(GREEN)
-        self.rect = pygame.Rect(0, 0, 2, 12)
+        self.rect = self.image.get_rect()
         self.speed = 500 / FPS
         self.rect.centerx = gun.rect.centerx
         self.rect.top = gun.rect.top
@@ -114,45 +126,64 @@ class Bullet(pygame.sprite.Sprite):
 
 
 class Enemy(pygame.sprite.Sprite):
-    image = load_image("yellow.png").convert_alpha()
-    image = pygame.transform.scale(image, (CELL_SIZE, CELL_SIZE))
+    image = load_image("enemies1.png").convert_alpha()
+    image = pygame.transform.scale(image, (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
 
     def __init__(self, coord_x, coord_y):
         super().__init__(all_sprites)
         self.image = Enemy.image
-        self.rect = self.image.get_rect(topleft=(coord_x, coord_y))
+        self.image.set_colorkey(BLACK)
+        self.rect = self.image.get_rect()
+
+        boltAnim = []
+        # анимация разрушения преградыa
+        for anim in ANIMATION_MOVE:
+            boltAnim.append((anim, 300))
+        self.boltAnim = pyganim.PygAnimation(boltAnim)
+        self.boltAnim.scale((self.rect.width, self.rect.height))
+        self.boltAnim.play()
+
         self.startY = coord_y
         self.rect.x = coord_x
         self.rect.y = coord_y
-        self.vx = 1
         self.add(enemies)
+        self.move_counter = 0
+        self.move_direction = 1
+        self.counter = 0
 
     def update(self):
-        self.rect.x += self.vx
-        if self.rect.x + self.rect[2] >= WIDTH or self.rect.x <= 0:
-            for raw in all_aliens:
-                # if self in raw:
-                for alien in raw:
-                    alien.vx *= -1
-                    alien.rect.y += alien.rect[3]
+
+        self.rect.x -= self.move_direction
+        self.move_counter += 1
+        self.counter += 1
+        if not self.counter % 10:
+            self.image.fill(BLACK)
+            self.boltAnim.blit(self.image, (0, 0))
+        if abs(self.move_counter) > 20:
+            self.move_direction *= -1
+            self.rect.y += 4
+            self.move_counter = -self.move_counter
 
         if bullets and pygame.sprite.collide_rect(self, bullets[0]):
+            print(self)
             bullets[0].kill()
             bullets.pop(0)
-            for i in all_aliens:
-                if self in i:
-                    i.pop(i.index(self))
+            for i in range(len(all_aliens)):
+                if self in all_aliens[i]:
+                    all_aliens[i].pop(all_aliens[i].index(self))
             self.kill()
 
 
 class Enemy_bullets(pygame.sprite.Sprite):
+    """класс создания вражеской пули"""
+
     def __init__(self, gun):
         if enemy_bullets:
             return
         super().__init__(all_sprites)
-        self.image = pygame.Surface((2, 12))
-        self.image.fill(GREEN)
-        self.rect = pygame.Rect(0, 0, 2, 12)
+        self.image = pygame.Surface((3, 12))
+        self.image.fill(YELLOW)
+        self.rect = self.image.get_rect()
         self.speed = 500 / FPS
         self.rect.centerx = gun.rect.centerx
         self.rect.top = gun.rect.bottom
@@ -165,6 +196,31 @@ class Enemy_bullets(pygame.sprite.Sprite):
         if self.rect.y > HEIGHT:
             enemy_bullets.pop(enemy_bullets.index(self))
             self.kill()
+
+        if bullets:
+            if pygame.sprite.collide_rect(self, bullets[0]):
+                self.kill()
+                bullets[0].kill()
+                bullets.pop(0)
+                enemy_bullets.pop(0)
+
+
+class Explosion(pygame.sprite.Sprite):
+    image = load_image("dead.png").convert_alpha()
+    image = pygame.transform.scale(image, (CELL_SIZE, CELL_SIZE))
+
+    def __init__(self, coord_x, coord_y):
+        super().__init__(all_sprites)
+        self.image = Explosion.image
+        self.image.set_colorkey(BLACK)
+        self.rect = self.image.get_rect()
+        self.rect.y = coord_y
+        self.rect.x = coord_x
+        self.rect.center = [self.rect.x, self.rect.y]
+        self.counter = 0
+
+    def update(self):
+        pass
 
 
 class Obstacle(pygame.sprite.Sprite):
@@ -181,7 +237,7 @@ class Obstacle(pygame.sprite.Sprite):
         boltAnim = []
         # анимация разрушения преграды
         for anim in ANIMATION_DESTROY:
-            boltAnim.append((anim, 100))
+            boltAnim.append((anim, 300))
         self.boltAnim = pyganim.PygAnimation(boltAnim)
         self.boltAnim.scale((CELL_SIZE * 2.75, CELL_SIZE * 2.75))
         self.boltAnim.play()
@@ -191,23 +247,41 @@ class Obstacle(pygame.sprite.Sprite):
         self.rect.y = coord_y
         self.add(obstacles)
 
-    def update(self):
-        if enemy_bullets:
-            i = enemy_bullets[0]
-            if pygame.sprite.collide_mask(self, i):
-                self.image.fill(BLACK)
-                self.boltAnim.blit(self.image, (0, 0))
-                i.kill()
-                self.life -= 1
-                if self.life == 0:
-                    self.kill()
-                enemy_bullets.pop(0)
+    # def update(self):
+    #     """при попадании пуль препятствие разрушается"""
+    #     if enemy_bullets:
+    #         i = enemy_bullets[0]
+    #         if pygame.sprite.collide_rect(self, i):
+    #             self.image.fill(BLACK)
+    #             self.boltAnim.blit(self.image, (0, 0))
+    #             i.kill()
+    #             self.life -= 1
+    #             if self.life == 0:
+    #                 self.kill()
+    #             enemy_bullets.pop(0)
+    #
+    #     if bullets:
+    #         i = bullets[0]
+    #         if pygame.sprite.collide_rect(self, i):
+    #             self.image.fill(BLACK)
+    #             self.boltAnim.blit(self.image, (0, 0))
+    #             i.kill()
+    #             self.life -= 1
+    #             if self.life == 0:
+    #                 self.kill()
+    #             bullets.pop(0)
 
-        if bullets:
-            i = bullets[0]
-            if pygame.sprite.collide_mask(self, i):
-                i.kill()
-                bullets.pop(0)
+
+def collide_en_bul_with_obst(en_bul, obst: Obstacle):
+    if pygame.sprite.collide_rect(obst, en_bul):
+        obst.life -= 1
+        obst.image.fill(BLACK)
+        obst.boltAnim.blit(obst.image, (0, 0))
+        if not obst.life:
+            bars.pop(bars.index(obst))
+            obst.kill()
+        enemy_bullets.pop(0)
+        en_bul.kill()
 
 
 def main():
@@ -220,10 +294,10 @@ def main():
     clock = pygame.time.Clock()
     pygame.display.set_caption("Space Invaders")
     gun = Gun(SCREEN)
-
     all_aliens = []
     all_obstacles = []
     bars = []
+
     for y in range(len(aliens)):
         a = []
         for x in range(len(aliens[0])):
@@ -261,9 +335,19 @@ def main():
         if not enemy_bullets:
             random_enemies = random.choice(all_aliens[-1])
             Enemy_bullets(random_enemies)
+
+        for obst in bars:
+            if enemy_bullets:
+                collide_en_bul_with_obst(enemy_bullets[0], obst)
+
         SCREEN.fill(BLACK)
         all_sprites.update()
         all_sprites.draw(SCREEN)
+        for i in range(gun.life):
+            img = pygame.transform.scale(load_image('heart.png'), (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
+            img.set_colorkey(BLACK)
+            SCREEN.blit(img, (i * CELL_SIZE * 1.5, 0))
+
         tick = clock.tick(FPS)
         pygame.display.flip()
 
