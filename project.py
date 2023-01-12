@@ -145,22 +145,20 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.y = coord_y
         self.move_counter = 0
         self.move_direction = 1
-        self.counter = 0
         self.add(enemies)
 
     def update(self):
 
-        self.rect.x -= self.move_direction
         self.move_counter += 1
-        self.counter += 1
-        if not self.counter % 10:
+        self.rect.x += self.move_direction
+        if self.rect.x + self.rect[2] > WIDTH or self.rect.x < 0:
+            for alien in enemies.sprites():
+                alien.rect.y += 3.5
+                alien.move_direction *= -1
+
+        if not self.move_counter % 20:
             self.image.fill(BLACK)
             self.boltAnim.blit(self.image, (0, 0))
-
-        if abs(self.move_counter) > 20:
-            self.move_direction *= -1
-            self.rect.y += 4
-            self.move_counter = -self.move_counter
 
         if self.rect.y + self.rect.height > gun.rect.y:
             pygame.quit()
@@ -233,17 +231,12 @@ class Octavius(pygame.sprite.Sprite):
 
     def update(self):
 
-        self.rect.x -= self.move_direction
         self.move_counter += 1
-        self.counter += 1
-        if not self.counter % 10:
+        self.rect.x += self.move_direction
+
+        if not self.move_counter % 20:
             self.image.fill(BLACK)
             self.boltAnim.blit(self.image, (0, 0))
-
-        if abs(self.move_counter) > 20:
-            self.move_direction *= -1
-            self.rect.y += 4
-            self.move_counter = -self.move_counter
 
         if self.rect.y + self.rect.height > gun.rect.y:
             pygame.quit()
@@ -398,6 +391,7 @@ def main():
                     gun.left = False
 
         all_aliens = [i for i in all_aliens if i]
+
 
         if not enemy_bullets:
             random_enemies = random.choice(all_aliens[-1])
