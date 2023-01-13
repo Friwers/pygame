@@ -15,6 +15,7 @@ YELLOW = pygame.Color("yellow")
 SIZE = WIDTH, HEIGHT = 700, 900
 SCREEN = pygame.display.set_mode(SIZE)
 FPS = 60
+score = 0
 bullets = []
 enemy_bullets = []
 all_sprites = pygame.sprite.Group()
@@ -86,6 +87,7 @@ class Gun(pygame.sprite.Sprite):
             self.rect.centerx += 250 / FPS
         if self.left and self.rect.left > self.screen_rect.left:
             self.rect.centerx -= 250 / FPS
+
         if enemy_bullets and pygame.sprite.collide_rect(self, enemy_bullets[0]):
             self.life -= 1
             enemy_bullets[0].kill()
@@ -93,6 +95,7 @@ class Gun(pygame.sprite.Sprite):
             pygame.time.wait(1000)
             if self.life == 0:
                 death_screen()
+
         if pygame.sprite.spritecollideany(self, enemies):
             time.sleep(2)
             main()
@@ -133,7 +136,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
 
         boltAnim = []
-        # анимация разрушения преградыa
+        # анимация передвижения
         for anim in ANIMATION_MOVE_ENEMIES:
             boltAnim.append((anim, 300))
         self.boltAnim = pyganim.PygAnimation(boltAnim)
@@ -148,7 +151,7 @@ class Enemy(pygame.sprite.Sprite):
         self.add(enemies)
 
     def update(self):
-
+        global score
         self.move_counter += 1
         self.rect.x += self.move_direction
         if self.rect.x + self.rect[2] > WIDTH or self.rect.x < 0:
@@ -156,20 +159,34 @@ class Enemy(pygame.sprite.Sprite):
                 alien.rect.y += 3.5
                 alien.move_direction *= -1
 
+        for i in range(len(all_aliens)):
+            for j in range(len(all_aliens[i]) - 1):
+                if not isinstance(all_aliens[i][j], str):
+                    c = 1
+                    while j + c < len(all_aliens):
+                        if all_aliens[i][j + c] == ' ':
+                            c += 1
+                        if all_aliens[i][j + c] != ' ':
+                            break
+                    if not isinstance(all_aliens[i][j + c], str) and all_aliens[i][j].rect.x + CELL_SIZE * 2 * c < \
+                            all_aliens[i][j + c].rect.x:
+                        all_aliens[i][j].rect.x = all_aliens[i][j + c].rect.x - 2 * CELL_SIZE * c
+
         if not self.move_counter % 20:
             self.image.fill(BLACK)
             self.boltAnim.blit(self.image, (0, 0))
 
         if self.rect.y + self.rect.height > gun.rect.y:
-            pygame.quit()
+            death_screen()
 
         if bullets and pygame.sprite.collide_rect(self, bullets[0]):
             bullets[0].kill()
             bullets.pop(0)
             for i in range(len(all_aliens)):
                 if self in all_aliens[i]:
-                    all_aliens[i].pop(all_aliens[i].index(self))
+                    all_aliens[i][all_aliens[i].index(self)] = ' '
             self.kill()
+            score += 10
 
 
 class Enemy_bullets(pygame.sprite.Sprite):
@@ -230,7 +247,7 @@ class Octavius(pygame.sprite.Sprite):
         self.add(enemies)
 
     def update(self):
-
+        global score
         self.move_counter += 1
         self.rect.x += self.move_direction
 
@@ -239,33 +256,16 @@ class Octavius(pygame.sprite.Sprite):
             self.boltAnim.blit(self.image, (0, 0))
 
         if self.rect.y + self.rect.height > gun.rect.y:
-            pygame.quit()
+            death_screen()
 
         if bullets and pygame.sprite.collide_rect(self, bullets[0]):
             bullets[0].kill()
             bullets.pop(0)
             for i in range(len(all_aliens)):
                 if self in all_aliens[i]:
-                    all_aliens[i].pop(all_aliens[i].index(self))
+                    all_aliens[i][all_aliens[i].index(self)] = ' '
             self.kill()
-
-
-class Explosion(pygame.sprite.Sprite):
-    image = load_image("dead.png").convert_alpha()
-    image = pygame.transform.scale(image, (CELL_SIZE, CELL_SIZE))
-
-    def __init__(self, coord_x, coord_y):
-        super().__init__(all_sprites)
-        self.image = Explosion.image
-        self.image.set_colorkey(BLACK)
-        self.rect = self.image.get_rect()
-        self.rect.y = coord_y
-        self.rect.x = coord_x
-        self.rect.center = [self.rect.x, self.rect.y]
-        self.counter = 0
-
-    def update(self):
-        pass
+            score += 10
 
 
 def collide_en_bul_with_obst(en_bul, bars):
@@ -276,6 +276,11 @@ def collide_en_bul_with_obst(en_bul, bars):
                 bars[i].pop(j)
                 enemy_bullets.pop(0)
                 en_bul.kill()
+                break
+
+            if pygame.sprite.spritecollideany(bars[i][j], enemies):
+                bars[i][j].kill()
+                bars[i].pop(j)
                 break
 
 
@@ -298,6 +303,15 @@ shape = [
     'xx       xx']
 
 
+def score_w(score):
+    font = pygame.font.Font(None, 30)
+    string_rendered = font.render('Score ' + str(score), True, pygame.Color('white'))
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2])
+    intro_rect.top = 0
+    SCREEN.blit(string_rendered, intro_rect)
+
+
 def death_screen() -> None:
     bg = Surface(SIZE)
     bg.fill(BLACK)
@@ -309,6 +323,13 @@ def death_screen() -> None:
     img_rect.x = (WIDTH - img_rect[2]) / 2
     img_rect.top = HEIGHT * 2 / 6 - img_rect[3] / 2
     SCREEN.blit(img, img_rect)
+
+    font = pygame.font.Font(None, 30)
+    string_rendered = font.render('Score ' + str(score), True, pygame.Color('white'))
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2]) / 2
+    intro_rect.top = HEIGHT * 2 / 4 - intro_rect[3] / 2
+    SCREEN.blit(string_rendered, intro_rect)
 
     font = pygame.font.Font(None, 30)
     string_rendered = font.render('Press <SPACE> to continue', True, pygame.Color('white'))
@@ -330,12 +351,13 @@ def death_screen() -> None:
 
 
 def main():
-    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies
+    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies, score
     all_sprites = pygame.sprite.Group()
     bullets = []
     enemy_bullets = []
     enemies = pygame.sprite.Group()
     octavies = pygame.sprite.Group()
+    score = 0
 
     pygame.init()
     pygame.display.set_caption("Space Invaders")
@@ -390,16 +412,18 @@ def main():
                 if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                     gun.left = False
 
-        all_aliens = [i for i in all_aliens if i]
-
+        all_aliens = [i for i in all_aliens if i and i != [' '] * len(i)]
 
         if not enemy_bullets:
             random_enemies = random.choice(all_aliens[-1])
+            while isinstance(random_enemies, str):
+                random_enemies = random.choice(all_aliens[-1])
             Enemy_bullets(random_enemies)
 
         if enemy_bullets:
             collide_en_bul_with_obst(enemy_bullets[0], bars)
         SCREEN.fill(BLACK)
+        score_w(score)
         all_sprites.update()
         all_sprites.draw(SCREEN)
         for i in range(gun.life):
