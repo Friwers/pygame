@@ -284,6 +284,17 @@ def collide_en_bul_with_obst(en_bul, bars):
                 break
 
 
+def collide_bul_with_obst(bul, bars):
+    for i in range(len(bars)):
+        for j in range(len(bars[i])):
+            if pygame.sprite.collide_rect(bars[i][j], bul):
+                bars[i][j].kill()
+                bars[i].pop(j)
+                bullets.pop(0)
+                bul.kill()
+                break
+
+
 class Block(pygame.sprite.Sprite):
     def __init__(self, size: tuple, x, y):
         super().__init__(all_sprites)
@@ -422,6 +433,8 @@ def main():
 
         if enemy_bullets:
             collide_en_bul_with_obst(enemy_bullets[0], bars)
+        if bullets:
+            collide_bul_with_obst(bullets[0], bars)
         SCREEN.fill(BLACK)
         score_w(score)
         all_sprites.update()
