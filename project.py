@@ -1,4 +1,5 @@
 import os
+import sqlite3
 from pygame import *
 import pygame
 import sys
@@ -7,6 +8,8 @@ import random
 import pyganim as pyganim
 import pygame_menu
 
+pygame.init()
+pygame.display.set_caption("Space Invaders")
 clock = pygame.time.Clock()
 BLACK = pygame.Color("black")
 GREEN = pygame.Color("green")
@@ -22,6 +25,7 @@ all_sprites = pygame.sprite.Group()
 enemies = pygame.sprite.Group()
 obstacles = pygame.sprite.Group()
 FILE_DIR = os.path.dirname(__file__)
+user_name = ""
 ANIMATION_MOVE_ENEMIES = [("data/enemies1.png"), ("data/enemies2.png")]
 ANIMATION_MOVE_OCTAVIUS = [("data/octavius1.png"), ("data/octavius2.png")]
 
@@ -70,7 +74,7 @@ class Gun(pygame.sprite.Sprite):
 
     def __init__(self, SCREEN):
         super().__init__(all_sprites)
-        self.screen = SCREEN
+        self.SCREEN = SCREEN
         self.image = Gun.image
         self.life = 3
         self.rect = self.image.get_rect()
@@ -323,6 +327,308 @@ def score_w(score):
     SCREEN.blit(string_rendered, intro_rect)
 
 
+def change_name(value: str) -> None:
+    """
+    Меняем глобальное имя пользователя, опять же чтоб не мучаться с пробром имени между меню и игрой.
+    """
+    global user_name
+    user_name = value
+
+
+# def set_sound_volume(value: Any, volume: float) -> None:
+#     """
+#     PyGame mixer не поддерживает глобальной громкости для звуков,
+#     поэтому нужно каждый звук регулировать отдельно.
+#     Пробегаем по инстансу звуков и выставляем громкость
+#     """
+#     for k, v in sounds.items():
+#         sounds[k].set_volume(volume)
+
+
+def menu_start() -> None:
+    """
+    стартовое меню игры
+    """
+
+    ABOUT = ['pygame project от ученика Яндекс Лицея',
+             'Author: Andrei Borisov', ]
+
+    HELP = ['Управление кнопками <A>, <D> и <SPACE>.']
+
+    # menu ABOUT
+    about_theme = pygame_menu.themes.THEME_DARK.copy()
+    about_theme.widget_margin = (0, 0)
+    about_menu = pygame_menu.Menu(
+        height=HEIGHT * 0.6,
+        theme=about_theme,
+        title='About',
+        width=WIDTH * 0.6,
+        mouse_enabled=True
+    )
+
+    for m in ABOUT:
+        about_menu.add.label(m, align=pygame_menu.locals.ALIGN_CENTER, font_size=20)
+    about_menu.add.vertical_margin(30)
+    about_menu.add.button('Return to menu', pygame_menu.events.BACK)
+
+    # menu HELP
+    help_theme = pygame_menu.themes.THEME_DARK.copy()
+    help_theme.widget_margin = (0, 0)
+    help_menu = pygame_menu.Menu(
+        height=HEIGHT * 0.9,
+        theme=help_theme,
+        title='Help',
+        width=WIDTH * 0.7,
+        mouse_enabled=True
+    )
+    for m in HELP:
+        help_menu.add.label(m, margin=(30, 0), align=pygame_menu.locals.ALIGN_LEFT, font_size=20)
+    help_menu.add.vertical_margin(30)
+    help_menu.add.button('Return to menu', pygame_menu.events.BACK)
+
+    # menu SCORES
+    scores_theme = pygame_menu.themes.THEME_DARK
+    scores_theme.widget_margin = (0, 0)
+    scores_menu = pygame_menu.Menu(
+        height=HEIGHT * 0.9,
+        theme=scores_theme,
+        title='High scores',
+        width=WIDTH * 0.7,
+        mouse_enabled=True
+    )
+    c = 0
+    for n, s in get_results():
+        if c == 10:
+            break
+        scores_menu.add.label(f'{n} --------- {s * 100}')
+        c += 1
+    scores_menu.add.vertical_margin(30)
+    scores_menu.add.button('Return to menu', pygame_menu.events.BACK)
+
+    # main MENU
+    menu = pygame_menu.Menu(height=HEIGHT,
+                            width=WIDTH,
+                            title='SPACE INVADERS',
+                            theme=pygame_menu.themes.THEME_DARK,
+                            mouse_enabled=True
+                            )
+
+    # img = os.path.join('data/img', 'logo.png')
+    # menu.add.image(img, scale=(0.6, 0.6), scale_smooth=True)
+
+    menu.add.button('Play', menu_level)
+    menu.add.text_input('Name: ', default=user_name, onchange=change_name)
+    # menu.add.selector('Volume: ', [(f'{i}%', i / 100) for i in range(0, 101, 10)], default=5, onchange=set_sound_volume)
+    menu.add.button('High scores', scores_menu)
+    menu.add.button('Help', help_menu)
+    menu.add.button('About', about_menu)
+    menu.add.button('Quit', pygame_menu.events.EXIT)
+    menu.mainloop(SCREEN)
+
+
+def menu_level() -> None:
+    """
+    menu Levels/Play
+    """
+    update_name(user_name)
+
+    level_theme = pygame_menu.themes.THEME_DARK.copy()
+    level_theme.widget_margin = (0, 0)
+    level_menu = pygame_menu.Menu(height=HEIGHT,
+                                  width=WIDTH,
+                                  title='LEVELS',
+                                  theme=level_theme,
+                                  mouse_enabled=True
+                                  )
+
+    levels = get_levels(user_name)[0]
+    level_menu.add.button(f'Level {str(1)}', main)
+    level_menu.add.vertical_margin(30)
+    level_menu.add.button('Return to menu', menu_start)
+    level_menu.mainloop(SCREEN)
+
+
+def get_levels(user_name: str) -> tuple:
+    con = sqlite3.connect('data/results.sqlite')
+    cur = con.cursor()
+
+    result = cur.execute(f"""SELECT open_levels FROM results
+                        WHERE name = '{user_name}'""").fetchone()
+
+    con.close()
+
+    return result
+
+
+def get_all_coins(user_name: str) -> tuple:
+    con = sqlite3.connect('data/results.sqlite')
+    cur = con.cursor()
+
+    result = cur.execute(f"""SELECT all_coins FROM results
+                            WHERE name = '{user_name}'""").fetchone()
+
+    con.close()
+
+    return result
+
+
+def update_name(user_name: str) -> None:
+    con = sqlite3.connect('data/results.sqlite')
+    cur = con.cursor()
+
+    result = cur.execute(f"""SELECT * FROM results
+                            WHERE name = '{user_name}'""").fetchone()
+    if not result:
+        cur.execute(f"""INSERT INTO
+                        results(name, open_levels, all_score, level1, level2, level3, level4, boss_level)
+                        VALUES('{user_name}', 1, 0, 0, 0, 0, 0, 0)""")
+
+    con.commit()
+    con.close()
+
+
+def update_bd(user_name: str, level_num: str, coins: int) -> None:
+    con = sqlite3.connect('data/results.sqlite')
+    cur = con.cursor()
+
+    if level_num == '7':
+        cur.execute(f"""UPDATE results
+                        SET boss_level = 1
+                        WHERE name = '{user_name}'""")
+
+        result = cur.execute(f"""SELECT * FROM results
+                                    WHERE name = '{user_name}'""").fetchone()
+
+        cur.execute(f"""UPDATE results
+                        SET all_coins = {sum(list(result[4:]))}
+                        WHERE name = '{user_name}'""")
+
+        con.commit()
+        con.close()
+
+        return
+
+    result = cur.execute(f"""SELECT level{level_num} FROM results
+                                WHERE name = '{user_name}'""").fetchone()
+
+    if result[0] < coins:
+        cs = coins
+    else:
+        cs = result[0]
+
+    cur.execute(f"""UPDATE results
+                SET level{level_num} = {cs}
+                WHERE name = '{user_name}'""")
+
+    if get_levels(user_name)[0] == int(level_num) and int(level_num) < all_aliens - 1:
+        ln = int(level_num) + 1
+    else:
+        ln = get_levels(user_name)[0]
+
+    cur.execute(f"""UPDATE results
+                    SET open_levels = {ln}
+                    WHERE name = '{user_name}'""")
+
+    result = cur.execute(f"""SELECT * FROM results
+                            WHERE name = '{user_name}'""").fetchone()
+
+    cur.execute(f"""UPDATE results
+                SET all_coins = {sum(list(result[4:]))}
+                WHERE name = '{user_name}'""")
+
+    con.commit()
+    con.close()
+
+
+def get_results() -> list:
+    con = sqlite3.connect('data/results.sqlite')
+    cur = con.cursor()
+
+    result = cur.execute(f"""SELECT name, all_score FROM results""").fetchall()
+
+    result.sort(key=lambda x: x[1], reverse=True)
+
+    con.close()
+
+    return result[:10]
+
+
+def start_screen() -> None:
+    fon = Surface(SIZE)
+    fon.fill(BLACK)
+    SCREEN.blit(fon, (0, 0))
+
+    img = load_image('logo.png')
+    img_rect = img.get_rect()
+    img_rect.x = (WIDTH - img_rect[2]) / 2
+    img_rect.top = HEIGHT * 2 / 6 - img_rect[3] / 2
+    SCREEN.blit(img, img_rect)
+
+    font = pygame.font.Font(None, 30)
+    string_rendered = font.render('Press any button to start', True, pygame.Color('white'))
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2]) / 2
+    intro_rect.top = HEIGHT * 3 / 4 - intro_rect[3] / 2
+    SCREEN.blit(string_rendered, intro_rect)
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN or \
+                    event.type == pygame.MOUSEBUTTONDOWN:
+                menu_start()
+        clock.tick(FPS)
+        pygame.display.flip()
+    pygame.quit()
+
+
+def result_screen() -> None:
+    global level_num
+
+    # sounds['victory_achieved'].play()
+
+    bg = Surface(SIZE)
+    bg.fill(WHITE)
+    SCREEN.blit(bg, (0, 0))
+
+    img = load_image('victory.png', 'img')
+    img = pygame.transform.scale(img, (694 * 1.5, 67 * 1.5))
+    img_rect = img.get_rect()
+    img_rect.x = (WIDTH - img_rect[2]) / 2
+    img_rect.top = HEIGHT * 2 / 6 - img_rect[3] / 2
+    SCREEN.blit(img, img_rect)
+
+    font = pygame.font.Font(None, 30)
+    string_rendered = font.render(f'Level {level_num}', True, BLACK)
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2]) / 2
+    intro_rect.top = HEIGHT * 0.15 - intro_rect[3] / 2
+    SCREEN.blit(string_rendered, intro_rect)
+
+    font = pygame.font.Font(None, 30)
+    # string_rendered = font.render(f'{coins} / {all_coins}', True, GOLD)
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2]) / 2
+    intro_rect.top = HEIGHT * 1 / 2 - intro_rect[3] / 2
+    SCREEN.blit(string_rendered, intro_rect)
+
+    font = pygame.font.Font(None, 30)
+    string_rendered = font.render('Press <SPACE> to continue', True, BLACK)
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2]) / 2
+    intro_rect.top = HEIGHT * 0.8 - intro_rect[3] / 2
+    SCREEN.blit(string_rendered, intro_rect)
+
+    font = pygame.font.Font(None, 30)
+    string_rendered = font.render('Press <M> to menu', True, BLACK)
+    intro_rect = string_rendered.get_rect()
+    intro_rect.x = (WIDTH - intro_rect[2]) / 2
+    intro_rect.top = HEIGHT * 0.9 - intro_rect[3] / 2
+    SCREEN.blit(string_rendered, intro_rect)
+
+
 def death_screen() -> None:
     bg = Surface(SIZE)
     bg.fill(BLACK)
@@ -361,6 +667,7 @@ def death_screen() -> None:
     pygame.quit()
 
 
+
 def main():
     global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies, score
     all_sprites = pygame.sprite.Group()
@@ -370,8 +677,6 @@ def main():
     octavies = pygame.sprite.Group()
     score = 0
 
-    pygame.init()
-    pygame.display.set_caption("Space Invaders")
     gun = Gun(SCREEN)
     all_aliens = []
     all_obstacles = []
@@ -446,4 +751,4 @@ def main():
         pygame.display.flip()
 
 
-main()
+menu_start()
