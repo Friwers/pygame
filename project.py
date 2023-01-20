@@ -19,6 +19,7 @@ SIZE = WIDTH, HEIGHT = 700, 900
 SCREEN = pygame.display.set_mode(SIZE)
 FPS = 60
 score = 0
+level_num = 1
 bullets = []
 enemy_bullets = []
 all_sprites = pygame.sprite.Group()
@@ -28,6 +29,18 @@ FILE_DIR = os.path.dirname(__file__)
 user_name = ""
 ANIMATION_MOVE_ENEMIES = [("data/enemies1.png"), ("data/enemies2.png")]
 ANIMATION_MOVE_OCTAVIUS = [("data/octavius1.png"), ("data/octavius2.png")]
+
+
+def sound_load(sound_path: str = 'sounds') -> dict:
+    """Загружает словарь звуков"""
+    sound_files = [f for f in os.listdir(sound_path) if os.path.isfile(os.path.join(sound_path, f))]
+    return {file_name.split('.')[0]: pygame.mixer.Sound(os.path.join(sound_path, file_name)) for
+            file_name in
+            sound_files}
+
+
+# чтоб не мучатся с пробросом звуков делаем глобально
+sounds = sound_load()
 
 
 def load_image(name: str, colorkey=None) -> pygame.Surface:
@@ -51,9 +64,9 @@ def loadLevel(level_num):
     """
     Загрузка уровня
     """
-    levelFile = open(f'%s/data/{"aliens.txt"}' % FILE_DIR)
+    levelFile = open(f'%s/data/{level_num}.txt' % FILE_DIR)
     line = " "
-    commands = []
+    aliens = []
     while line[0] != "/":  # пока не нашли символ завершения файла
         line = levelFile.readline()  # считываем построчно
         if line and line[0] == "[":  # если нашли символ начала уровня
@@ -61,11 +74,11 @@ def loadLevel(level_num):
                 line = levelFile.readline()  # считываем построчно уровень
                 if line[0] != "]":  # и если нет символа конца уровня
                     aliens.append(line)  # и добавляем в уровень строку от начала до символа "|"
+    return aliens
 
 
-aliens = []
-loadLevel('')
-CELL_SIZE = WIDTH / (len(aliens[0]))
+aliens = loadLevel(1)
+CELL_SIZE = WIDTH // (len(aliens[0]))
 
 
 class Gun(pygame.sprite.Sprite):
@@ -133,7 +146,7 @@ class Enemy(pygame.sprite.Sprite):
     image = load_image("enemies1.png").convert_alpha()
     image = pygame.transform.scale(image, (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
 
-    def __init__(self, coord_x, coord_y):
+    def __init__(self, coord_x, coord_y, v):
         super().__init__(all_sprites)
         self.image = Enemy.image
         self.image.set_colorkey(BLACK)
@@ -151,7 +164,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.x = coord_x
         self.rect.y = coord_y
         self.move_counter = 0
-        self.move_direction = 1
+        self.move_direction = v
         self.add(enemies)
 
     def update(self):
@@ -228,7 +241,7 @@ class Octavius(pygame.sprite.Sprite):
     image = load_image("octavius1.png").convert_alpha()
     image = pygame.transform.scale(image, (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
 
-    def __init__(self, coord_x, coord_y):
+    def __init__(self, coord_x, coord_y, v):
         super().__init__(all_sprites)
         self.image = Octavius.image
         self.image.set_colorkey(BLACK)
@@ -246,7 +259,7 @@ class Octavius(pygame.sprite.Sprite):
         self.rect.x = coord_x
         self.rect.y = coord_y
         self.move_counter = 0
-        self.move_direction = 1
+        self.move_direction = v
         self.counter = 0
         self.add(enemies)
 
@@ -442,7 +455,7 @@ def menu_level() -> None:
                                   )
 
     levels = get_levels(user_name)[0]
-    level_menu.add.button(f'Level {str(1)}', main)
+    level_menu.add.button(f'Level {str(1)}', main, 1)
     level_menu.add.vertical_margin(30)
     level_menu.add.button('Return to menu', menu_start)
     level_menu.mainloop(SCREEN)
@@ -587,46 +600,63 @@ def start_screen() -> None:
 def result_screen() -> None:
     global level_num
 
-    # sounds['victory_achieved'].play()
+    sounds['win'].play()
 
     bg = Surface(SIZE)
-    bg.fill(WHITE)
+    bg.fill(BLACK)
     SCREEN.blit(bg, (0, 0))
 
-    img = load_image('victory.png', 'img')
-    img = pygame.transform.scale(img, (694 * 1.5, 67 * 1.5))
+    img = load_image('win.png')
+    img = pygame.transform.scale(img, (150, 150))
     img_rect = img.get_rect()
     img_rect.x = (WIDTH - img_rect[2]) / 2
     img_rect.top = HEIGHT * 2 / 6 - img_rect[3] / 2
     SCREEN.blit(img, img_rect)
 
     font = pygame.font.Font(None, 30)
-    string_rendered = font.render(f'Level {level_num}', True, BLACK)
+    string_rendered = font.render(f'Level {level_num}', True, WHITE)
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2]) / 2
     intro_rect.top = HEIGHT * 0.15 - intro_rect[3] / 2
     SCREEN.blit(string_rendered, intro_rect)
 
     font = pygame.font.Font(None, 30)
-    # string_rendered = font.render(f'{coins} / {all_coins}', True, GOLD)
+    string_rendered = font.render(f'SCORE {score}', True, WHITE)
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2]) / 2
     intro_rect.top = HEIGHT * 1 / 2 - intro_rect[3] / 2
     SCREEN.blit(string_rendered, intro_rect)
 
     font = pygame.font.Font(None, 30)
-    string_rendered = font.render('Press <SPACE> to continue', True, BLACK)
+    string_rendered = font.render('Press <SPACE> to continue', True, WHITE)
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2]) / 2
     intro_rect.top = HEIGHT * 0.8 - intro_rect[3] / 2
     SCREEN.blit(string_rendered, intro_rect)
 
     font = pygame.font.Font(None, 30)
-    string_rendered = font.render('Press <M> to menu', True, BLACK)
+    string_rendered = font.render('Press <M> to menu', True, WHITE)
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2]) / 2
     intro_rect.top = HEIGHT * 0.9 - intro_rect[3] / 2
     SCREEN.blit(string_rendered, intro_rect)
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN and event.key == K_SPACE:
+                if level_num != '6' and level_num != '7':
+                    sounds['win'].stop()
+                    level_num = str(int(level_num) + 1)
+                    main(level_num)
+            if event.type == pygame.KEYDOWN and event.key == K_m:
+                sounds['win'].stop()
+                menu_level()
+        clock.tick(FPS)
+        pygame.display.flip()
+    pygame.quit()
 
 
 def death_screen() -> None:
@@ -667,14 +697,15 @@ def death_screen() -> None:
     pygame.quit()
 
 
-
-def main():
-    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies, score
+def main(level_num):
+    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies, score, CELL_SIZE
     all_sprites = pygame.sprite.Group()
     bullets = []
     enemy_bullets = []
     enemies = pygame.sprite.Group()
     octavies = pygame.sprite.Group()
+    aliens = loadLevel(level_num)
+    CELL_SIZE = WIDTH // (len(aliens[0]))
     score = 0
 
     gun = Gun(SCREEN)
@@ -687,13 +718,18 @@ def main():
     img = pygame.transform.scale(load_image('heart.png'), (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
     img.set_colorkey(BLACK)
 
+    v = 0
+
+    if level_num == 1:
+        v = 1
+
     for y in range(len(aliens)):
         a = []
         for x in range(len(aliens[0])):
             coord_x = x * CELL_SIZE
             coord_y = y * CELL_SIZE
             if aliens[y][x] == "-":
-                pt = Enemy(coord_x, coord_y)
+                pt = Enemy(coord_x, coord_y, v)
                 a.append(pt)
                 enemies.add(pt)
             if aliens[y][x] == 'x':
@@ -705,7 +741,7 @@ def main():
                             bar.append(b)
                 bars.append(bar)
             if aliens[y][x] == '@':
-                pt1 = Octavius(coord_x, coord_y)
+                pt1 = Octavius(coord_x, coord_y, v)
                 a.append(pt1)
                 enemies.add(pt1)
         all_aliens.append(a)
@@ -729,6 +765,9 @@ def main():
                     gun.left = False
 
         all_aliens = [i for i in all_aliens if i and i != [' '] * len(i)]
+
+        if not all_aliens:
+            result_screen()
 
         if not enemy_bullets:
             random_enemies = random.choice(all_aliens[-1])
