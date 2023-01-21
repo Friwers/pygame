@@ -99,7 +99,6 @@ class Gun(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
 
     def update(self, *args):
-
         if self.right and self.rect.right < self.screen_rect.right:
             self.rect.centerx += 250 / FPS
         if self.left and self.rect.left > self.screen_rect.left:
@@ -124,6 +123,7 @@ class Bullet(pygame.sprite.Sprite):
     def __init__(self, gun):
         if bullets:
             return
+        sounds['laser'].play()
         super().__init__(all_sprites)
         self.image = pygame.Surface((3, 15))
         self.image.fill(GREEN)
@@ -146,7 +146,7 @@ class Enemy(pygame.sprite.Sprite):
     image = load_image("enemies1.png").convert_alpha()
     image = pygame.transform.scale(image, (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
 
-    def __init__(self, coord_x, coord_y, v):
+    def __init__(self, coord_x, coord_y, v, vy):
         super().__init__(all_sprites)
         self.image = Enemy.image
         self.image.set_colorkey(BLACK)
@@ -165,6 +165,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.y = coord_y
         self.move_counter = 0
         self.move_direction = v
+        self.move_down = vy
         self.add(enemies)
 
     def update(self):
@@ -173,7 +174,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.x += self.move_direction
         if self.rect.x + self.rect[2] > WIDTH or self.rect.x < 0:
             for alien in enemies.sprites():
-                alien.rect.y += 3.5
+                alien.rect.y += self.move_down
                 alien.move_direction *= -1
 
         for i in range(len(all_aliens)):
@@ -203,15 +204,18 @@ class Enemy(pygame.sprite.Sprite):
                 if self in all_aliens[i]:
                     all_aliens[i][all_aliens[i].index(self)] = ' '
             self.kill()
+            sounds['death_alien'].play()
             score += 10
 
 
 class Enemy_bullets(pygame.sprite.Sprite):
-    """класс создания вражеской пули"""
-
+    """
+    класс создания вражеской пули
+    """
     def __init__(self, gun):
         if enemy_bullets:
             return
+        sounds['laser_enemy'].play()
         super().__init__(all_sprites)
         self.image = pygame.Surface((3, 15))
         self.image.fill(YELLOW)
@@ -241,7 +245,7 @@ class Octavius(pygame.sprite.Sprite):
     image = load_image("octavius1.png").convert_alpha()
     image = pygame.transform.scale(image, (CELL_SIZE * 1.5, CELL_SIZE * 1.5))
 
-    def __init__(self, coord_x, coord_y, v):
+    def __init__(self, coord_x, coord_y, v, vy):
         super().__init__(all_sprites)
         self.image = Octavius.image
         self.image.set_colorkey(BLACK)
@@ -260,6 +264,7 @@ class Octavius(pygame.sprite.Sprite):
         self.rect.y = coord_y
         self.move_counter = 0
         self.move_direction = v
+        self.move_down = vy
         self.counter = 0
         self.add(enemies)
 
@@ -267,6 +272,19 @@ class Octavius(pygame.sprite.Sprite):
         global score
         self.move_counter += 1
         self.rect.x += self.move_direction
+
+        for i in range(len(all_aliens)):
+            for j in range(len(all_aliens[i]) - 1):
+                if not isinstance(all_aliens[i][j], str):
+                    c = 1
+                    while j + c < len(all_aliens):
+                        if all_aliens[i][j + c] == ' ':
+                            c += 1
+                        if all_aliens[i][j + c] != ' ':
+                            break
+                    if not isinstance(all_aliens[i][j + c], str) and all_aliens[i][j].rect.x + CELL_SIZE * 2 * c < \
+                            all_aliens[i][j + c].rect.x:
+                        all_aliens[i][j].rect.x = all_aliens[i][j + c].rect.x - 2 * CELL_SIZE * c
 
         if not self.move_counter % 20:
             self.image.fill(BLACK)
@@ -455,7 +473,10 @@ def menu_level() -> None:
                                   )
 
     levels = get_levels(user_name)[0]
-    level_menu.add.button(f'Level {str(1)}', main, 1)
+    for i in range(1, levels + 1):
+        level_menu.add.button(f'Level {i}', main, i)
+    # if get_all_score(user_name)[0] >= 18:
+    #     level_menu.add.button(f'Boss Level', boss_level)
     level_menu.add.vertical_margin(30)
     level_menu.add.button('Return to menu', menu_start)
     level_menu.mainloop(SCREEN)
@@ -473,11 +494,11 @@ def get_levels(user_name: str) -> tuple:
     return result
 
 
-def get_all_coins(user_name: str) -> tuple:
+def get_all_score(user_name: str) -> tuple:
     con = sqlite3.connect('data/results.sqlite')
     cur = con.cursor()
 
-    result = cur.execute(f"""SELECT all_coins FROM results
+    result = cur.execute(f"""SELECT all_score FROM results
                             WHERE name = '{user_name}'""").fetchone()
 
     con.close()
@@ -500,11 +521,11 @@ def update_name(user_name: str) -> None:
     con.close()
 
 
-def update_bd(user_name: str, level_num: str, coins: int) -> None:
+def update_bd(user_name: str, level_num: str, score: int) -> None:
     con = sqlite3.connect('data/results.sqlite')
     cur = con.cursor()
 
-    if level_num == '7':
+    if level_num == '5':
         cur.execute(f"""UPDATE results
                         SET boss_level = 1
                         WHERE name = '{user_name}'""")
@@ -513,7 +534,7 @@ def update_bd(user_name: str, level_num: str, coins: int) -> None:
                                     WHERE name = '{user_name}'""").fetchone()
 
         cur.execute(f"""UPDATE results
-                        SET all_coins = {sum(list(result[4:]))}
+                        SET all_score = {sum(list(result[4:]))}
                         WHERE name = '{user_name}'""")
 
         con.commit()
@@ -524,8 +545,8 @@ def update_bd(user_name: str, level_num: str, coins: int) -> None:
     result = cur.execute(f"""SELECT level{level_num} FROM results
                                 WHERE name = '{user_name}'""").fetchone()
 
-    if result[0] < coins:
-        cs = coins
+    if result[0] < score:
+        cs = score
     else:
         cs = result[0]
 
@@ -546,7 +567,7 @@ def update_bd(user_name: str, level_num: str, coins: int) -> None:
                             WHERE name = '{user_name}'""").fetchone()
 
     cur.execute(f"""UPDATE results
-                SET all_coins = {sum(list(result[4:]))}
+                SET all_score = {sum(list(result[4:]))}
                 WHERE name = '{user_name}'""")
 
     con.commit()
@@ -647,7 +668,7 @@ def result_screen() -> None:
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.KEYDOWN and event.key == K_SPACE:
-                if level_num != '6' and level_num != '7':
+                if level_num != '4' and level_num != '5':
                     sounds['win'].stop()
                     level_num = str(int(level_num) + 1)
                     main(level_num)
@@ -660,6 +681,8 @@ def result_screen() -> None:
 
 
 def death_screen() -> None:
+    sounds['lose'].play()
+
     bg = Surface(SIZE)
     bg.fill(BLACK)
     SCREEN.blit(bg, (0, 0))
@@ -691,7 +714,8 @@ def death_screen() -> None:
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.KEYDOWN and event.key == K_SPACE:
-                main()
+                main(level_num)
+
         clock.tick(FPS)
         pygame.display.flip()
     pygame.quit()
@@ -719,9 +743,15 @@ def main(level_num):
     img.set_colorkey(BLACK)
 
     v = 0
+    vy = 0
 
     if level_num == 1:
         v = 1
+        vy = 3.5
+    if level_num == 2:
+        v = 1
+        vy = 4.5
+
 
     for y in range(len(aliens)):
         a = []
@@ -729,7 +759,7 @@ def main(level_num):
             coord_x = x * CELL_SIZE
             coord_y = y * CELL_SIZE
             if aliens[y][x] == "-":
-                pt = Enemy(coord_x, coord_y, v)
+                pt = Enemy(coord_x, coord_y, v, vy)
                 a.append(pt)
                 enemies.add(pt)
             if aliens[y][x] == 'x':
@@ -741,7 +771,7 @@ def main(level_num):
                             bar.append(b)
                 bars.append(bar)
             if aliens[y][x] == '@':
-                pt1 = Octavius(coord_x, coord_y, v)
+                pt1 = Octavius(coord_x, coord_y, v, vy)
                 a.append(pt1)
                 enemies.add(pt1)
         all_aliens.append(a)
