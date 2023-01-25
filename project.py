@@ -18,15 +18,16 @@ YELLOW = pygame.Color("yellow")
 SIZE = WIDTH, HEIGHT = 700, 900
 SCREEN = pygame.display.set_mode(SIZE)
 FPS = 60
-score = 0
 level_num = 1
+user_name = 'Unnamed'
+level = []
+all_score = 0
 bullets = []
 enemy_bullets = []
 all_sprites = pygame.sprite.Group()
 enemies = pygame.sprite.Group()
 obstacles = pygame.sprite.Group()
 FILE_DIR = os.path.dirname(__file__)
-user_name = ""
 ANIMATION_MOVE_ENEMIES = [("data/enemies1.png"), ("data/enemies2.png")]
 ANIMATION_MOVE_OCTAVIUS = [("data/octavius1.png"), ("data/octavius2.png")]
 
@@ -64,9 +65,11 @@ def loadLevel(level_num):
     """
     Загрузка уровня
     """
+    global all_score
     levelFile = open(f'%s/data/{level_num}.txt' % FILE_DIR)
     line = " "
     aliens = []
+    all_score = 0
     while line[0] != "/":  # пока не нашли символ завершения файла
         line = levelFile.readline()  # считываем построчно
         if line and line[0] == "[":  # если нашли символ начала уровня
@@ -169,7 +172,7 @@ class Enemy(pygame.sprite.Sprite):
         self.add(enemies)
 
     def update(self):
-        global score
+        global all_score
         self.move_counter += 1
         self.rect.x += self.move_direction
         if self.rect.x + self.rect[2] > WIDTH or self.rect.x < 0:
@@ -205,13 +208,14 @@ class Enemy(pygame.sprite.Sprite):
                     all_aliens[i][all_aliens[i].index(self)] = ' '
             self.kill()
             sounds['death_alien'].play()
-            score += 10
+            all_score += 10
 
 
 class Enemy_bullets(pygame.sprite.Sprite):
     """
     класс создания вражеской пули
     """
+
     def __init__(self, gun):
         if enemy_bullets:
             return
@@ -269,7 +273,7 @@ class Octavius(pygame.sprite.Sprite):
         self.add(enemies)
 
     def update(self):
-        global score
+        global all_score
         self.move_counter += 1
         self.rect.x += self.move_direction
 
@@ -300,7 +304,8 @@ class Octavius(pygame.sprite.Sprite):
                 if self in all_aliens[i]:
                     all_aliens[i][all_aliens[i].index(self)] = ' '
             self.kill()
-            score += 10
+            sounds['death_alien'].play()
+            all_score += 10
 
 
 def collide_en_bul_with_obst(en_bul, bars):
@@ -349,9 +354,9 @@ shape = [
     'xx       xx']
 
 
-def score_w(score):
+def score_w(all_score):
     font = pygame.font.Font(None, 30)
-    string_rendered = font.render('Score ' + str(score), True, pygame.Color('white'))
+    string_rendered = font.render('score ' + str(all_score), True, pygame.Color('white'))
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2])
     intro_rect.top = 0
@@ -364,16 +369,6 @@ def change_name(value: str) -> None:
     """
     global user_name
     user_name = value
-
-
-# def set_sound_volume(value: Any, volume: float) -> None:
-#     """
-#     PyGame mixer не поддерживает глобальной громкости для звуков,
-#     поэтому нужно каждый звук регулировать отдельно.
-#     Пробегаем по инстансу звуков и выставляем громкость
-#     """
-#     for k, v in sounds.items():
-#         sounds[k].set_volume(volume)
 
 
 def menu_start() -> None:
@@ -432,7 +427,7 @@ def menu_start() -> None:
         if c == 10:
             break
         scores_menu.add.label(f'{n} --------- {s * 100}')
-        c += 1
+        c += 0
     scores_menu.add.vertical_margin(30)
     scores_menu.add.button('Return to menu', pygame_menu.events.BACK)
 
@@ -449,7 +444,6 @@ def menu_start() -> None:
 
     menu.add.button('Play', menu_level)
     menu.add.text_input('Name: ', default=user_name, onchange=change_name)
-    # menu.add.selector('Volume: ', [(f'{i}%', i / 100) for i in range(0, 101, 10)], default=5, onchange=set_sound_volume)
     menu.add.button('High scores', scores_menu)
     menu.add.button('Help', help_menu)
     menu.add.button('About', about_menu)
@@ -521,32 +515,32 @@ def update_name(user_name: str) -> None:
     con.close()
 
 
-def update_bd(user_name: str, level_num: str, score: int) -> None:
+def update_bd(user_name: str, level_num: str, all_score: int) -> None:
     con = sqlite3.connect('data/results.sqlite')
     cur = con.cursor()
 
-    if level_num == '5':
-        cur.execute(f"""UPDATE results
-                        SET boss_level = 1
-                        WHERE name = '{user_name}'""")
-
-        result = cur.execute(f"""SELECT * FROM results
-                                    WHERE name = '{user_name}'""").fetchone()
-
-        cur.execute(f"""UPDATE results
-                        SET all_score = {sum(list(result[4:]))}
-                        WHERE name = '{user_name}'""")
-
-        con.commit()
-        con.close()
-
-        return
+    # if level_num == '5':
+    #     cur.execute(f"""UPDATE results
+    #                     SET boss_level = 1
+    #                     WHERE name = '{user_name}'""")
+    #
+    #     result = cur.execute(f"""SELECT * FROM results
+    #                                 WHERE name = '{user_name}'""").fetchone()
+    #
+    #     cur.execute(f"""UPDATE results
+    #                     SET all_score = {sum(list(result[4:]))}
+    #                     WHERE name = '{user_name}'""")
+    #
+    #     con.commit()
+    #     con.close()
+    #
+    #     return
 
     result = cur.execute(f"""SELECT level{level_num} FROM results
                                 WHERE name = '{user_name}'""").fetchone()
 
-    if result[0] < score:
-        cs = score
+    if result[0] < all_score:
+        cs = all_score
     else:
         cs = result[0]
 
@@ -642,7 +636,7 @@ def result_screen() -> None:
     SCREEN.blit(string_rendered, intro_rect)
 
     font = pygame.font.Font(None, 30)
-    string_rendered = font.render(f'SCORE {score}', True, WHITE)
+    string_rendered = font.render(f'all_score {all_score}', True, WHITE)
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2]) / 2
     intro_rect.top = HEIGHT * 1 / 2 - intro_rect[3] / 2
@@ -695,7 +689,7 @@ def death_screen() -> None:
     SCREEN.blit(img, img_rect)
 
     font = pygame.font.Font(None, 30)
-    string_rendered = font.render('Score ' + str(score), True, pygame.Color('white'))
+    string_rendered = font.render('all_score ' + str(all_score), True, pygame.Color('white'))
     intro_rect = string_rendered.get_rect()
     intro_rect.x = (WIDTH - intro_rect[2]) / 2
     intro_rect.top = HEIGHT * 2 / 4 - intro_rect[3] / 2
@@ -722,7 +716,7 @@ def death_screen() -> None:
 
 
 def main(level_num):
-    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies, score, CELL_SIZE
+    global all_aliens, bullets, enemies, all_sprites, bars, entities, all_obstacles, gun, enemy_bullets, octavies, all_score, CELL_SIZE
     all_sprites = pygame.sprite.Group()
     bullets = []
     enemy_bullets = []
@@ -730,7 +724,7 @@ def main(level_num):
     octavies = pygame.sprite.Group()
     aliens = loadLevel(level_num)
     CELL_SIZE = WIDTH // (len(aliens[0]))
-    score = 0
+    all_score = 0
 
     gun = Gun(SCREEN)
     all_aliens = []
@@ -752,6 +746,17 @@ def main(level_num):
         v = 1
         vy = 4.5
 
+    if level_num == 3:
+        v = 1
+        vy = 5.5
+
+    if level_num == 4:
+        v = 1
+        vy = 6.5
+
+    if level_num == 5:
+        v = 1
+        vy = 10.5
 
     for y in range(len(aliens)):
         a = []
@@ -810,7 +815,7 @@ def main(level_num):
         if bullets:
             collide_bul_with_obst(bullets[0], bars)
         SCREEN.fill(BLACK)
-        score_w(score)
+        score_w(all_score)
         all_sprites.update()
         all_sprites.draw(SCREEN)
         for i in range(gun.life):
